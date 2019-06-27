@@ -10,6 +10,7 @@ import com.qmdx00.service.OrderService;
 import com.qmdx00.service.OrderStatusService;
 import com.qmdx00.util.*;
 import com.qmdx00.util.enums.ResponseStatus;
+import com.qmdx00.util.enums.Role;
 import com.qmdx00.util.enums.Status;
 import com.qmdx00.util.model.Response;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,7 @@ import java.util.*;
  * @date 19/06/17 08:43
  * @description 订单 Controller
  */
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "Duplicates"})
 @Slf4j
 @RestController
 @RequestMapping("/api/order")
@@ -44,13 +45,56 @@ public class OrderController extends BaseController {
     }
 
     /**
+     * 管理员获取所有订单
+     *
+     * @param request 请求
+     * @return Response
+     */
+    @GetMapping("/admin")
+    public Response getAllOrderByAdmin(HttpServletRequest request) {
+        String token = request.getHeader("token");
+        if (!VerifyUtil.checkString(token)) {
+            return ResultUtil.returnStatus(ResponseStatus.NOT_LOGIN);
+        } else {
+            try {
+                // 解析token
+                Claim claim = tokenUtil.getClaim(token, "account_id");
+                String customerId = claim.asString();
+                Account account = accountService.findAccountById(customerId);
+                if (account != null && account.getRole() == Role.ADMIN) {
+                    List<Order> orders = orderService.findAllOrderByAdmin();
+                    if (orders != null) {
+                        List<HashMap> list = new LinkedList<>();
+                        for (Order order : orders) {
+                            HashMap in = new HashMap();
+                            in.put("order", order);
+                            in.put("status", orderStatusService.getStatusById(order.getOrderId()));
+                            list.add(in);
+                        }
+                        log.info("get orders: {}", list);
+                        return ResultUtil.returnStatusAndData(ResponseStatus.SUCCESS, list);
+                    } else {
+                        return ResultUtil.returnStatus(ResponseStatus.NOT_FOUND);
+                    }
+                } else {
+                    return ResultUtil.returnStatus(ResponseStatus.VISITED_FORBID);
+                }
+            } catch (JWTVerificationException e) {
+                // 解析失败，token无效
+                log.error("{}", e);
+                return ResultUtil.returnStatus(ResponseStatus.NOT_LOGIN);
+            }
+        }
+    }
+
+    /**
      * 获取当前用户的所有订单
      *
      * @param request 请求
      * @return Response
      */
     @GetMapping
-    public Response getAllOrder(HttpServletRequest request) {
+    public Response getAllOrderByCustomer(HttpServletRequest request) {
         String token = request.getHeader("token");
         if (!VerifyUtil.checkString(token)) {
             return ResultUtil.returnStatus(ResponseStatus.NOT_LOGIN);
@@ -61,12 +105,12 @@ public class OrderController extends BaseController {
                 String customerId = claim.asString();
                 Account account = accountService.findAccountById(customerId);
                 if (account != null) {
-                    List<Order> orders = orderService.findAllOrder(customerId);
+                    List<Order> orders = orderService.findAllOrderByCustomer(customerId);
                     if (orders != null) {
                         List<HashMap> list = new LinkedList<>();
                         for (Order order : orders) {
                             HashMap in = new HashMap();
-                            in.put("handle", order);
+                            in.put("order", order);
                             in.put("status", orderStatusService.getStatusById(order.getOrderId()));
                             list.add(in);
                         }
@@ -108,7 +152,10 @@ public class OrderController extends BaseController {
                 if (account != null) {
                     Order order = orderService.findOrderById(id, customerId);
                     if (order != null) {
-                        return ResultUtil.returnStatusAndData(ResponseStatus.SUCCESS, order);
+                        HashMap in = new HashMap();
+                        in.put("order", order);
+                        in.put("status", orderStatusService.getStatusById(order.getOrderId()));
+                        return ResultUtil.returnStatusAndData(ResponseStatus.SUCCESS, in);
                     } else {
                         return ResultUtil.returnStatus(ResponseStatus.NOT_FOUND);
                     }
@@ -170,7 +217,7 @@ public class OrderController extends BaseController {
                     // 同时创建一条订单状态的记录
                     OrderStatus status = orderStatusService.saveStatus(OrderStatus.builder()
                             .orderId(orderId)
-                            .orderStatus(Status.CREATED)
+                            .orderStatus(Status.CREATE)
                             .build());
                     log.info("create order: {}", order);
                     log.info("create status: {}", status);
@@ -221,7 +268,7 @@ public class OrderController extends BaseController {
                     OrderStatus status = orderStatusService.getStatusById(id);
                     Order order = orderService.findOrderById(id, customerId);
                     if (order != null) {
-                        if (status.getOrderStatus() == Status.CREATED) {
+                        if (status.getOrderStatus() == Status.CREATE) {
                             Integer row = orderService.updateOrder(Order.builder()
                                     .orderId(order.getOrderId())
                                     .customerId(order.getCustomerId())

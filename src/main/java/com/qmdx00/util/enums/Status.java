@@ -9,7 +9,13 @@ public enum Status {
     /**
      * 已创建
      */
-    CREATED,
+    CREATE,
+    /**
+     * 拒绝
+     */
     REFUSE,
+    /**
+     * 接受
+     */
     ACCEPT
 }
